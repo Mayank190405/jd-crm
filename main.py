@@ -18,7 +18,9 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-
+@app.on_event("startup")
+def startup():
+    Base.metadata.create_all(bind=engine)
 
 
 # Initialize FastAPI

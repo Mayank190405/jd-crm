@@ -22,6 +22,8 @@ load_dotenv()
 
 # Initialize FastAPI
 app = FastAPI(title="Property CRM API", version="1.0.0")
+
+from db.database import Base, engine
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)

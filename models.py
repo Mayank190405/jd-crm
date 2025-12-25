@@ -163,5 +163,4 @@ class Interaction(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     lead = relationship("Lead", back_populates="interactions")
-    
-    Base = declarative_base()
+    # Line removed here: Base = declarative_base()

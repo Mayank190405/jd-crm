@@ -32,11 +32,14 @@ def startup():
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://crm.jaydevelopers.com"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Create upload directories
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads"))

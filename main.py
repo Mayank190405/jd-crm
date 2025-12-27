@@ -14,7 +14,11 @@ from sqlalchemy import desc, func, or_
 
 import models
 from database import engine, get_db
+from passlib.context import CryptContext
+from fastapi import Form
+from sqlalchemy import or_
 from dotenv import load_dotenv
+
 
 # Load environment variables
 load_dotenv()
@@ -27,6 +31,15 @@ from database import Base, engine
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
 
 
 # CORS
@@ -170,43 +183,49 @@ def startup_event():
     finally:
         if db:
             db.close()
+@app.post("/api/auth/register")
+async def register_user(
+    data: UserCreate,
+    db: Session = Depends(get_db)
+):
+    # Check existing user
+    existing = db.query(models.User).filter(
+        or_(
+            models.User.email == data.email,
+            models.User.phone == data.phone
+        )
+    ).first()
+
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="User with email or phone already exists"
+        )
+
+    user = models.User(
+        name=data.name,
+        email=data.email,
+        phone=data.phone,
+        role=data.role,
+        password=hash_password(data.password),
+        capacity=data.capacity,
+        active_leads_count=0,
+        is_active=True,
+        avatar=data.name[0].upper()
+    )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "message": "User registered successfully",
+        "user_id": user.id
+    }
 
 
 # ----- AUTHENTICATION -----
 
-@app.post("/api/auth/login")
-async def login(
-    username: str = Form(...),
-    password: str = Form(...),
-    db: Session = Depends(get_db)
-):
-    # Find user by phone or email
-    user = db.query(models.User).filter(
-        or_(
-            models.User.phone == username,
-            models.User.email == username
-        ),
-        models.User.password == password,
-        models.User.is_active == True
-    ).first()
-    
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    return {
-        "access_token": "test-token-123",
-        "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "name": user.name,
-            "email": user.email,
-            "phone": user.phone,
-            "role": user.role,
-            "active_leads_count": user.active_leads_count,
-            "capacity": user.capacity,
-            "avatar": user.avatar
-        }
-    }
 
 @app.get("/api/auth/me")
 async def get_current_user(db: Session = Depends(get_db)):
@@ -222,6 +241,40 @@ async def get_current_user(db: Session = Depends(get_db)):
         "email": user.email,
         "phone": user.phone,
         "is_active": user.is_active
+    }
+@app.post("/api/auth/login")
+async def login(
+    username: str = Form(...),
+    password: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    user = db.query(models.User).filter(
+        or_(
+            models.User.email == username,
+            models.User.phone == username
+        ),
+        models.User.is_active == True
+    ).first()
+
+    if not user or not verify_password(password, user.password):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials"
+        )
+
+    return {
+        "access_token": "test-token-123",
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "phone": user.phone,
+            "role": user.role,
+            "active_leads_count": user.active_leads_count,
+            "capacity": user.capacity,
+            "avatar": user.avatar
+        }
     }
 
 # ----- LEADS -----
